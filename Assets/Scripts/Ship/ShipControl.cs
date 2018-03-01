@@ -4,66 +4,92 @@ using System.Collections;
 public class ShipControl : MonoBehaviour
 {
 
-	Rigidbody m_body;
-	public float acc_force_per_unit_weight;//??ish
-	public float steer_force_per_unit_weight;//??ish
-	public float self_right_force_per_unit_weight;//??ish
+	private Rigidbody mRigidBody;
+	private GameObject mShip;
+	//public float mAccelerationForce;//force magnitude
+	//public float mSteerForce;//force magnitude
+	public float mAcceleration;
 
+	public float mSteeringAcceleration;
+	public float mSteeringDecceleration;
 
-	private float acc_force;//force magnitude
-	private float steer_force;//force magnitude
-	private float self_right_force;//force magnitude
+	public float mMaxSpeed;
+	public float mMaxSteerSpeed;
 
-	private float self_right_amount;
+	private float mAccelerateInput = 0.0f;
+	private float mSteerInput = 0.0f;
 
-	private float hover_force_main;
+	public float mAirResistanceForce;
+	public float mAerodynamicForce;
 
-	private float force_multiplier;
-
-	
-	private int layerMask = 1 << 8;
-	
 	// Use this for initialization
 	void Start ()
     {
-		m_body = GetComponent<Rigidbody>();
-
-		acc_force = acc_force_per_unit_weight*m_body.mass;
-		steer_force = steer_force_per_unit_weight*m_body.mass;
-		self_right_force = self_right_force_per_unit_weight;
+		mRigidBody = transform.parent.gameObject.GetComponent<Rigidbody>();	
+		mShip = transform.parent.gameObject;
 	}
 	
 	// Update is called once per frame
 	void Update ()
 	{
-
+		mAccelerateInput = Input.GetAxis ("Accelerate");
+		mSteerInput = Input.GetAxis ("Horizontal");
 	}
 
 	void FixedUpdate()
 	{
-		RaycastHit hit;
-
-		//Accelerate force
-		m_body.AddRelativeForce(new Vector3(0.0f,0.0f,(acc_force * Input.GetAxis("Accelerate") * m_body.mass))*Time.deltaTime);
-		
-		//Turning force
-		m_body.AddRelativeTorque(new Vector3(0.0f,(steer_force * Input.GetAxis("Horizontal")* m_body.mass),0.0f)*Time.deltaTime);
-
-		
-		if((m_body.transform.localRotation.z >= 0) && (m_body.transform.localRotation.z < 180))
+		if (mRigidBody.velocity.sqrMagnitude < mMaxSpeed*mMaxSpeed)
 		{
-			self_right_amount = -m_body.transform.localRotation.z/180;
+			mRigidBody.AddRelativeForce(new Vector3(0.0f,0.0f,mAccelerateInput*mAcceleration),ForceMode.Acceleration);
 		}
-		else if((m_body.transform.localRotation.z < 0) && (m_body.transform.localRotation.z > -180))
+			
+		if ((mRigidBody.angularVelocity.y > 0.0f && mSteerInput < 0.0f) || (mRigidBody.angularVelocity.y < 0.0f && mSteerInput > 0.0f))
 		{
-			self_right_amount = m_body.transform.localRotation.z/180;
+			//Decceleration
+			mRigidBody.AddRelativeTorque (new Vector3 (0.0f, mSteerInput * mSteeringDecceleration, 0.0f), ForceMode.Acceleration);	
+		}
+		else if(mSteerInput == 0.0f)
+		{
+			//Debug.Log ("Velocity" + mRigidBody.angularVelocity.y);
+
+			/*
+			if (mRigidBody.angularVelocity.y > 0.0f)
+			{
+				mRigidBody.AddRelativeTorque (new Vector3 (0.0f, -mSteeringDecceleration, 0.0f), ForceMode.Acceleration);
+			}
+			else if (mRigidBody.angularVelocity.y < 0.0f)
+			{
+				mRigidBody.AddRelativeTorque (new Vector3 (0.0f, mSteeringDecceleration, 0.0f), ForceMode.Acceleration);
+			}
+			*/
 		}
 		else
 		{
-			self_right_amount = 0;
+			if (Mathf.Abs (mRigidBody.angularVelocity.y) < mMaxSteerSpeed)
+			{
+			//Acceleration
+				mRigidBody.AddRelativeTorque (new Vector3 (0.0f,mSteerInput *mSteeringAcceleration, 0.0f), ForceMode.Acceleration);	
+			}
 		}
 
-		m_body.AddRelativeTorque(new Vector3(0.0f,0.0f,(self_right_force * self_right_amount * m_body.mass))*Time.deltaTime);
+		Vector3 tVelocity = mRigidBody.velocity;
+		//tVelocity = Vector3.RotateTowards (tVelocity, mShip.transform.forward, 0.01f, 0.0f);
+		//mRigidBody.velocity = new Vector3(tVelocity.x, tVelocity.y, tVelocity.z);
+
+
+
+
+		//AIR RESISTANCE
+		float tAirResistanceFactor = (Vector3.Angle(mRigidBody.velocity.normalized,mShip.transform.forward)/90.0f);
+
+		Vector3 tAirResitanceForce = -mRigidBody.velocity.normalized * tAirResistanceFactor * mAirResistanceForce;
+		Vector3 tAerodynamicForce = mShip.transform.forward * tAirResistanceFactor * mAerodynamicForce;
+
+		//Vector3 tAirflowResultForce = tAirResitanceForce;
+		Vector3 tAirflowResultForce = (tAirResitanceForce + tAerodynamicForce);
+		tAirflowResultForce = tAirflowResultForce *  (mRigidBody.velocity.magnitude / mMaxSpeed);
+		mRigidBody.AddForce (tAirflowResultForce, ForceMode.Force);
+
 
 	}
 }
